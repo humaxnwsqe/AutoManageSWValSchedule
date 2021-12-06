@@ -211,7 +211,9 @@ function countOnBGColorOrange_2019(countRange) {
  * 현재 주차를 초록색으로 칠하기 위한 함수
  */
 function fillCurrentWeekRangeBG() {
-  //Read data from the range Sheet1!A1:C6
+  SpreadsheetApp.flush();
+
+  //Read weeks data from the range of "H1:DI1"
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var basicrange = ss.getActiveSheet().getRange("H1:DI1");
   var values = basicrange.getValues();
