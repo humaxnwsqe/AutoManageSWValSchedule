@@ -6,6 +6,8 @@
  */
 ///////////////////////
 
+
+
 /**
  * @function name: onOpen()
  * @author: Hyucksu Lee
@@ -53,16 +55,22 @@ function onEdit(e){
 
   var range = e.range;
 
-  Logger.log(range.getColumn());  
-  Logger.log(range.getNumColumns());
-  //range.setNote('Modified range info: ' + range.getColumn() + '/' + range.getNumColumns());
+  console.log("\'onEdit()\' The start position of changed range: row is " + range.getRow())
+  console.log("\'onEdit()\' The start position of changed range: column is " + range.getColumn());  
+  console.log("\'onEdit()\' The number of changed row is " + range.getNumRows())
+  console.log("\'onEdit()\' The number of changed column is " + range.getNumColumns());
 
   //일정 변경 sheet, range를 입력 인자로 받아 해당 위치의 HQ, VN 검증 모델 수를 카운트 하기 위한 함수 호출
-  updateMacro(sheet, range);
-
+  //if 조건은 편집이 발생한 range 시작 Row가 7 이상 그리고 Column은 8 이상 일 경우만 updage macro를 수행 하기 위한 조건
+  if (range.getRow() >= UPDATE_VAL_RANGE_ROW_START 
+    && range.getColumn() >= UPDATE_VAL_RANGE_COL_START){ 
+    updateMacro(sheet, range);
+    //SpreadsheetApp.flush();
+  }
   
 }
 //*/
+
 
 /**
  * @function name: updateMacro()
@@ -75,26 +83,227 @@ function onEdit(e){
  * 최초 onEdit 함수에서 구현 되어 있던 내용을 별도로 분리한 케이스 임.
  */
 
+function varInit(){
+  var remProp = PropertiesService.getScriptProperties();
+  remProp.getProperty('remRun');
+  remProp.setProperty('remRun', 'stop');
+  h = 0;
+  countHQ = 0;
+  countVN = 0;
+}
+
 function updateMacro(sheet, range){
   //var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  startTime = (new Date()).getTime() / 1000;
+
+  console.log("start time is " + startTime);
+
+  var remProp = PropertiesService.getScriptProperties();
+  remRun = remProp.getProperty('remRun');
+  console.log(remRun);
+
+  var h;
+  var countHQ;
+  var countVN;
+
+  switch(remRun){
+    case 'running':
+      remProp.setProperty('remRun', 'stop')
+      console.log('이미 다른 프로세스에서 진행중이므로 종료');
+      return;
+    case 'continue':
+      remProp.setProperty('remRun', 'running')
+      console.log('remRun의 상태를 running으로 변경 후 이전 작업에서 이어서 시작');
+      h = parseInt(remProp.getProperty('remI'));
+      break;
+    default:
+      //remProp.setProperty('remRun', 'stop')
+      //remProp.setProperty('remRun','running');
+      //console.log(remProp.getProperty('remRun'));
+      //var triggers = ScriptApp.getProjectTriggers();
+      //console.log(`triggers.length is ${triggers.length} !!!!!!!!!!!!!!!!`)
+      h = 0;
+      countHQ = 0;
+      countVN = 0;
+      console.log('remRun의 상태를 running으로 변경 후 새 작업으로 시작');
+  } //*/
+
+
+  /* console.log("\'updateMacro()\' The start position of changed range: row is " + range.getRow())
+  console.log("\'updateMacro()\' The start position of changed range: column is " + range.getColumn());  
+  console.log("\'updateMacro()\' The number of changed row is " + range.getNumRows())
+  console.log("\'updateMacro()\' The number of changed column is " + range.getNumColumns()); */
+
+  var editedcellnums = parseInt(range.getNumRows() * range.getNumColumns());
+
+  console.log(`\`updateMacro()\` Edited number of cells is(are) ${editedcellnums} and current h is ${h} !!`);
+
+  var bg = range.getBackgrounds();
+
+
+  console.log("\'updateMacro()\' The number of initial HQ background cell is " + countHQ);
+  console.log("\'updateMacro()\' The number of initial VN background cell is " + countVN);
+
+  if (h == 0) {
+    for(var i=0;i<bg.length;i++){
+      for(var j=0;j<bg[0].length;j++){
+        
+        if( bg[i][j] == HQcolor ){
+          //console.log("\'updateMacro()\' Current cell background info is " + bg[i][j])
+          //console.log("\'updateMacro()\' The number of counted HQ background cell is " + countHQ)
+          countHQ=countHQ+1;
+        }else if(bg[i][j] == VNcolor){
+          //console.log("\'updateMacro()\' Current cell background info is " + bg[i][j])
+          //console.log("\'updateMacro()\' The number of counted VN background cell is " + countVN)
+          countVN=countVN+1;
+        }
+      }
+    }
+  }  
+
+  console.log("\'updateMacro()\' The number of counted HQ background cell is " + countHQ);
+  console.log("\'updateMacro()\' The number of counted VN background cell is " + countVN);
 
   var targetRangeHQ = sheet.getRange(5, range.getColumn(), 1, range.getNumColumns());
   var targetRangeVN = sheet.getRange(6, range.getColumn(), 1, range.getNumColumns());
 
-  //targetRange.setNote('Modified targetRange info: ' + targetRange.getColumn() + '/' + targetRange.getNumColumns());
+  while (h < editedcellnums){
+    console.log(`\'updateMacro()\' while loop entered and h: ${h} \, edited cell nums : ${editedcellnums}`);
 
-  //range.setNote('Test: ' + range.getRow() + '/' + range.getColumn() + '/' + range.getNumRows());
-  //range.setNote('Test: ' + targetRange.getRow() + '/' + targetRange.getColumn() + '/' + targetRange.getNumRows());
+    //remProp.setProperty(`remI`, h);
 
-  //Logger.log(targetRange)
+/*     if(countHQ == 0 && countVN == 0){
+      return;
+    } */
+
+    if (countHQ > 0 && countVN == 0) {
+      console.log(`(Case 1) Only HQ cells updated case!`);
+      for(i = 0; i < targetRangeHQ.getNumColumns(); i++){ 
+        remProp.setProperty(`remI`, h);
+
+        if (i == 0) {
+          console.log("\'updateMacro()\' The start position of targetRange(HQ) info: row is " + targetRangeHQ.getRow())
+          console.log("\'updateMacro()\' The start position of targetRange(HQ) info: column is " + targetRangeHQ.getColumn())
+        }else if(i > 0){
+          console.log("\'updateMacro()\' The cur_update position of targetRange(HQ) info: row is " + targetRangeHQ.getRow())
+          console.log("\'updateMacro()\' The cur_update position of targetRange(HQ) info: column is " + (targetRangeHQ.getColumn() + i))
+        }  
+        
+        //console.log("\'updateMacro()\' i is " + i)
+        updateFuncInRange(targetRangeHQ.getRow(), targetRangeHQ.getColumn() + i);   
+        
   
-  for(i = 0; i < targetRangeHQ.getNumColumns(); i++){    
-     updateFuncInRange(targetRangeHQ.getRow(), targetRangeHQ.getColumn() + i);    
+        currentTime = (new Date()).getTime() / 1000;
+        console.log("Run time is " + (currentTime - startTime));
+
+        if ((currentTime - startTime) > MAXIMUM_EXE_TIME) {
+          console.log(`Time has gone more than MAXIMUM EXECUTION TIME!!!`)
+          remProp.setProperty('remRun', 'continue');
+
+          /* deleteTriggers('updateMacro');
+
+          ScriptApp.newTrigger('updateMacro')
+            .timeBased()
+            .after(EXE_TERM*1000)
+            .create();
+          
+          consolo.log(`다음 실행 시간 : ${EXE_TERM}초 뒤`); */
+  
+          return;
+
+        }
+  
+        /* if(currentTime - startTime > MAXIMUM_EXE_TIME){
+            remProp.setProperty('remRun', 'continue');
+  
+            deleteTriggers('updateMacro');
+  
+            ScriptApp.newTrigger('updateMacro')
+            .timeBased()
+            .after(EXE_TERM*1000)
+            .create();
+            consolo.log(`다음 실행 시간 : ${EXE_TERM}초 뒤`);
+  
+            return;
+        } */ 
+        
+        h++; 
+      }
+    }else if (countVN > 0 && countHQ == 0) {
+      console.log(`(Case 2) Only VN cells updated case!`);
+      for(j = 0; j < targetRangeVN.getNumColumns(); j++){
+        console.log("\'updateMacro()\' The start position of targetRange(VN) info: row is " + targetRangeVN.getRow())
+        console.log("\'updateMacro()\' The start position of targetRange(VN) info: column is " + targetRangeVN.getColumn())
+        console.log("\'updateMacro()\' j is " + j)
+        updateFuncInRange(targetRangeVN.getRow(), targetRangeVN.getColumn() + j);
+        
+  
+        /* currentTime = (new Date()).getTime() / 1000;
+        console.log("current time is " + currentTime);
+  
+        console.log("지나간 시간은 ? " + (currentTime - startTime) );
+  
+        if(currentTime - startTime > MAXIMUM_EXE_TIME){
+            remProp.setProperty('remRun', 'continue');
+      
+            deleteTriggers('updateMacro');
+      
+            ScriptApp.newTrigger('updateMacro')
+            .timeBased()
+            .after(EXE_TERM*1000)
+            .create();
+            consolo.log(`다음 실행 시간 : ${EXE_TERM}초 뒤`);
+      
+            return;
+        } */ 
+        
+        h++;
+      }
+    }else {
+      console.log(`(Case 3) Both HQ and VN cellS updated case! `);
+      console.log(`or`);
+      console.log(`(Case 4) CellS cleared case!`);
+      for(i = 0; i < targetRangeHQ.getNumColumns(); i++){   
+        console.log("\'updateMacro()\' The start position of targetRange(HQ) info: row is " + targetRangeHQ.getRow())
+        console.log("\'updateMacro()\' The start position of targetRange(HQ) info: column is " + targetRangeHQ.getColumn())
+        console.log("\'updateMacro()\' i is " + i)
+        updateFuncInRange(targetRangeHQ.getRow(), targetRangeHQ.getColumn() + i);   
+        h++;         
+      }
+
+      for(j = 0; j < targetRangeVN.getNumColumns(); j++){
+        //console.log("\'updateMacro()\' The start position of targetRange(VN) info: row is " + targetRangeVN.getRow())
+        //console.log("\'updateMacro()\' The start position of targetRange(VN) info: column is " + targetRangeVN.getColumn())
+        //console.log("\'updateMacro()\' j is " + j)
+        updateFuncInRange(targetRangeVN.getRow(), targetRangeVN.getColumn() + j);
+        h++;        
+      }
+    }
+
+    console.log(`##current h is ${h} !!!!!!!!!!!!!!!!`)
   }
 
-  for(i = 0; i < targetRangeVN.getNumColumns(); i++){
-     updateFuncInRange(targetRangeVN.getRow(), targetRangeVN.getColumn() + i);
-  }
+  console.log('모든 카운트 작업 완료. 관련 자원 삭제 처리.');
+
+  remProp.deleteProperty('remRun');
+  remProp.deleteProperty('remI');
+  //deleteTriggers('updateMacro');
+  //SpreadsheetApp.flush();
+  return;
+}
+
+function deleteTriggers(funcName)
+{
+  console.log(`\'deleteTriggers()\' function name is ${funcName} !!!!!!!!!!!!!!!!!!!!!!!!`)
+  //if (ScriptApp.getProjectTriggers().length > 0){
+  var triggers = ScriptApp.getProjectTriggers();
+  
+  for(var i=0; i<triggers.length; i++)
+    if(triggers[i].getHandlerFunction() == funcName)
+      ScriptApp.deleteTrigger(triggers[i]);    
+  //}  
+  
+  return;
 }
 
 /** 
@@ -106,11 +315,14 @@ function updateMacro(sheet, range){
  */
 
 function updateFuncInRange(row, col){
+  //console.log("Row info is " + row);
+  //console.log("Column info is " + col);
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getActiveSheet();
   var orig = sheet.getRange(row,col).getFormula(); 
-  //var temp = orig.replace("=", "?");
-  sheet.getRange(row,col).setFormula(""); 
+  var temp = orig.replace("=", "?");
+  //sheet.getRange(row,col).setFormula(""); 
+  sheet.getRange(row,col).setFormula(temp); 
   SpreadsheetApp.flush();
   sheet.getRange(row,col).setFormula(orig); 
   //SpreadsheetApp.flush();
