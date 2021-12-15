@@ -28,7 +28,7 @@ function onOpen(e) {
   //커스텀 메뉴를 생성
   var menu = SpreadsheetApp.getUi().createMenu('Custom Menu');
   menu.addItem("Fill Current Week Position", "fillCurrentWeekRangeBG");
-  menu.addItem("Ready to make Schedule State Update", "createEditTrigger");
+  //menu.addItem("Ready to make Schedule State Update", "createEditTrigger");
   menu.addToUi();
 
   //위와 같이 변수 하나를 만들고 필요한 메뉴를 하나씩 붙일 수 있지만 아래 같은 방식으로도 가능하다.
@@ -110,8 +110,10 @@ function onOpen(e) {
 
 function createEditTrigger(){
   //var triggers = ScriptApp.getProjectTriggers()
-  
-  if(checkIfTriggerExists(ScriptApp.EventType.ON_EDIT, runScript) == false){
+  console.log(`ScriptApp.getProjectTriggers().length (before createEditTrigger) is ${ScriptApp.getProjectTriggers().length} !`);
+
+
+  if(checkIfTriggerExists(ScriptApp.EventType.ON_EDIT, "runScript") == false){
     ScriptApp.newTrigger("runScript")
     .forSpreadsheet(SpreadsheetApp.getActive())
     .onEdit()
@@ -119,6 +121,8 @@ function createEditTrigger(){
   }else {
     console.log(`Programmed edit trigger is already existed!`);
   }
+
+  console.log(`ScriptApp.getProjectTriggers().length (after createEditTrigger) is ${ScriptApp.getProjectTriggers().length} !`);
   
   return;
 }
@@ -126,18 +130,33 @@ function createEditTrigger(){
 /**
  * 
  * @function name: checkIfTriggerExists 
- * @author name: Hyucksu Lee
+ * @author: Hyucksu Lee
  * @update date: 2021.12.15
+ * @params
+ * eventType: ON_EDIT
+ * handlerFunction: runScript 함수 이름, string type
  * @description
  * createEditTrigger에서 triggering 되는 runScript event가 여러 번 생성되지 않도록 체크하기 위한 함수
- * 하지만 현재 (2021.12.15) 기준 제대로 동작하고 있지 않음. 추후 확인 및 수정 필요
  */
 function checkIfTriggerExists(eventType, handlerFunction) {
   var triggers = ScriptApp.getProjectTriggers();
   var triggerExists = false;
 
   console.log(`checkIfTriggerExists() / eventType is ${eventType} !`);
+  console.log(`checkIfTriggerExists() / handlerFunction is ${handlerFunction} !`);
 
+if(triggers.length > 0){
+  for(var i=0; i<triggers.length; i++){
+    console.log(`triggers.getEventType() is ${triggers[i].getEventType()}`);
+    console.log(`triggers.getHandlerFunction() is ${triggers[i].getHandlerFunction()}`);
+    if(triggers[i].getEventType() === eventType &&
+      triggers[i].getHandlerFunction() === handlerFunction){
+        console.log(`Inside of if condition in trigger.getHandlerFunction is ${triggers[i].getHandlerFunction()}`)
+        triggerExists = true;
+      }
+  }
+}
+/* 
   triggers.forEach(function (trigger) {
     if(trigger.getEventType() === eventType &&
       trigger.getHandlerFunction() === handlerFunction){
@@ -145,7 +164,7 @@ function checkIfTriggerExists(eventType, handlerFunction) {
         triggerExists = true;
       }
       
-  });
+  }); */
 
   console.log(`triggerExists state is ${triggerExists} !`);
 
@@ -183,6 +202,15 @@ function runScript(eventInfo) {
   console.log(`Current Active Sheet name is ${sheet.getName()}`);
 
   var range = eventInfo.range;
+
+  //변경 이벤트 발생 영역의 시작점을 체크. 변경 영역 시작점이 유효 범위가
+  //아닐 경우 runScript trigger 삭제 처리하고 runScript 종료 처리
+  if (range.getRow() < UPDATE_VAL_RANGE_ROW_START 
+    || range.getColumn() < UPDATE_VAL_RANGE_COL_START){
+      console.log('변경 영역 시작점이 유효하지 않음. ON_EDIT 트리거 삭제 처리.');
+      deleteTriggers('runScript'); 
+      return;
+  }
 
   console.log("\'runScript()\' The start position of changed range: row is " + range.getRow())
   console.log("\'runScript()\' The start position of changed range: column is " + range.getColumn());  
@@ -309,19 +337,21 @@ function runScript(eventInfo) {
  */
 function deleteTriggers(funcName)
 {
-  console.log(`\'deleteTriggers()\' function name is ${funcName} !!!!!!!!!!!!!!!!!!!!!!!!`)
-  console.log(`ScriptApp.getProjectTriggers().length (before delete triggers) is ${ScriptApp.getProjectTriggers().length} !`);
+  var triggers = ScriptApp.getProjectTriggers();
 
-  if (ScriptApp.getProjectTriggers().length > 0){
-    var triggers = ScriptApp.getProjectTriggers();
-    
-    for(var i=0; i<triggers.length; i++)
-      if(triggers[i].getHandlerFunction() == funcName)
-        ScriptApp.deleteTrigger(triggers[i]);    
+  console.log(`\'deleteTriggers()\' function name is ${funcName} !!!!!!!!!!!!!!!!!!!!!!!!`)
+
+  if (triggers.length > 0){    
+    for(var i=0; i<triggers.length; i++){      
+      if(triggers[i].getHandlerFunction() === funcName){
+        console.log(`target trigger function should be deleted !!`);
+        ScriptApp.deleteTrigger(triggers[i]); 
+      }  
+    }   
   }  
 
-  console.log(`ScriptApp.getProjectTriggers().length (after delete triggers) is ${ScriptApp.getProjectTriggers().length} !`);
-  
+  createEditTrigger();
+
   return;
 }
 
