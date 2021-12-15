@@ -28,6 +28,7 @@ function onOpen(e) {
   //커스텀 메뉴를 생성
   var menu = SpreadsheetApp.getUi().createMenu('Custom Menu');
   menu.addItem("Fill Current Week Position", "fillCurrentWeekRangeBG");
+  menu.addItem("Ready to make Schedule State Update", "createEditTrigger");
   menu.addToUi();
 
   //위와 같이 변수 하나를 만들고 필요한 메뉴를 하나씩 붙일 수 있지만 아래 같은 방식으로도 가능하다.
@@ -46,10 +47,13 @@ function onOpen(e) {
  * @update date: 2021.11.25
  * @description
  * onEdit은 문서 내 편집이 발생 했을 때 자동 실행이 필요한 것들을 실해하도록 지원한다.
+ * (update, 2021.12.15) onEdit은 simple trigger 이며 실행 시간이 30 sec limit이 있어 trigger를 통해 여러 함수들이
+ * 실행할 경우 30 sec가 넘는 경우도 종종 발생하기도 한다. 이런 문제를 해결하기 위해 onEdit 대신 
+ * programmatic trigger 방식으로 해결 했다. 그래서 onEdit는 주석 처리 함
  * 
  */
 
-function onEdit(e){
+/* function onEdit(e){
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   //Logger.log(sheet.getName())
 
@@ -64,198 +68,203 @@ function onEdit(e){
   //if 조건은 편집이 발생한 range 시작 Row가 7 이상 그리고 Column은 8 이상 일 경우만 updage macro를 수행 하기 위한 조건
   if (range.getRow() >= UPDATE_VAL_RANGE_ROW_START 
     && range.getColumn() >= UPDATE_VAL_RANGE_COL_START){ 
-    updateMacro(sheet, range);
+    //runScript();
     //SpreadsheetApp.flush();
   }
   
-}
-//*/
+} */
 
 
 /**
- * @function name: updateMacro()
- * @input variable(s)
- * sheet: Active Sheet의 sheet 객체 
- * range: 수정이 발생한 영역(range)에 대한 객체 
- * @author: Hyucksu Lee
- * @update date: 2021.11.25
+ * @function name: runScript
+ * @author: Hyucksu Lee 
+ * @update date: 2021.12.14
  * @description
- * 최초 onEdit 함수에서 구현 되어 있던 내용을 별도로 분리한 케이스 임.
+ * 이 runScript는 trigger 처리 관련 테스트를 위한 함수로 original runScript와 이름은 동일하지만
+ * 목적은 다름. 테스트 목적 외에는 전체 주석 처리 함 
+ */
+/* function runScript(eventInfo) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  Logger.log(JSON.stringify(eventInfo));
+
+  var range = eventInfo.range;
+    
+  console.log("\'runScript()\' The start position of changed range: row is " + range.getRow())
+  console.log("\'runScript()\' The start position of changed range: column is " + range.getColumn());  
+  console.log("\'runScript()\' The number of changed row is " + range.getNumRows())
+  console.log("\'runScript()\' The number of changed column is " + range.getNumColumns());
+
+
+  console.log("run script function has runned.!");
+  console.log(`Current Active Sheet name is ${sheet.getName()}`);
+} */
+
+/**
+ * @function name: createEditTrigger
+ * @author: Hyucksu Lee
+ * @update date: 2021.12.15
+ * @description
+ * onOpen이나 onEdit 함수와 같은 simple trigger가 아닌 programmatic trigger이며
+ * 코드 상으로 onEdit 성격의 trigger를 생성해 준다.
  */
 
-function varInit(){
+function createEditTrigger(){
+  //var triggers = ScriptApp.getProjectTriggers()
+  
+  if(checkIfTriggerExists(ScriptApp.EventType.ON_EDIT, runScript) == false){
+    ScriptApp.newTrigger("runScript")
+    .forSpreadsheet(SpreadsheetApp.getActive())
+    .onEdit()
+    .create();
+  }else {
+    console.log(`Programmed edit trigger is already existed!`);
+  }
+  
+  return;
+}
+
+/**
+ * 
+ * @function name: checkIfTriggerExists 
+ * @author name: Hyucksu Lee
+ * @update date: 2021.12.15
+ * @description
+ * createEditTrigger에서 triggering 되는 runScript event가 여러 번 생성되지 않도록 체크하기 위한 함수
+ * 하지만 현재 (2021.12.15) 기준 제대로 동작하고 있지 않음. 추후 확인 및 수정 필요
+ */
+function checkIfTriggerExists(eventType, handlerFunction) {
+  var triggers = ScriptApp.getProjectTriggers();
+  var triggerExists = false;
+
+  console.log(`checkIfTriggerExists() / eventType is ${eventType} !`);
+
+  triggers.forEach(function (trigger) {
+    if(trigger.getEventType() === eventType &&
+      trigger.getHandlerFunction() === handlerFunction){
+        console.log(`trigger.getHandlerFunction is ${trigger.getHandlerFunction()}`)
+        triggerExists = true;
+      }
+      
+  });
+
+  console.log(`triggerExists state is ${triggerExists} !`);
+
+  return triggerExists;
+}
+
+/* function varInit(){
   var remProp = PropertiesService.getScriptProperties();
   remProp.getProperty('remRun');
   remProp.setProperty('remRun', 'stop');
   h = 0;
   countHQ = 0;
   countVN = 0;
-}
+} */
 
-function updateMacro(sheet, range){
-  //var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+/**
+ * @function name: runScript()
+ * @input variable(s)
+ * evnetInfo: simple trigger 함수에서 e와 같은 역할 임 
+ * @author: Hyucksu Lee
+ * @update date: 2021.12.15
+ * @return: null
+ * @description
+ * 최초 onEdit 함수에서 구현 되어 있던 내용을 별도로 분리한 케이스 임.
+ * 이후 HQ, VN 셀 업데이트에 따라 검증 수 카운트를 구분해 업데이트 하도록 코드 수정
+ */
+
+function runScript(eventInfo) {
+  //해당 함수 시작 시간 체크
   startTime = (new Date()).getTime() / 1000;
-
   console.log("start time is " + startTime);
 
-  var remProp = PropertiesService.getScriptProperties();
-  remRun = remProp.getProperty('remRun');
-  console.log(remRun);
+  //현재 active 상태의 sheet 객체를 가져오기 위함
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  console.log(`Current Active Sheet name is ${sheet.getName()}`);
 
-  var h;
-  var countHQ;
-  var countVN;
+  var range = eventInfo.range;
 
-  switch(remRun){
-    case 'running':
-      remProp.setProperty('remRun', 'stop')
-      console.log('이미 다른 프로세스에서 진행중이므로 종료');
-      return;
-    case 'continue':
-      remProp.setProperty('remRun', 'running')
-      console.log('remRun의 상태를 running으로 변경 후 이전 작업에서 이어서 시작');
-      h = parseInt(remProp.getProperty('remI'));
-      break;
-    default:
-      //remProp.setProperty('remRun', 'stop')
-      //remProp.setProperty('remRun','running');
-      //console.log(remProp.getProperty('remRun'));
-      //var triggers = ScriptApp.getProjectTriggers();
-      //console.log(`triggers.length is ${triggers.length} !!!!!!!!!!!!!!!!`)
-      h = 0;
-      countHQ = 0;
-      countVN = 0;
-      console.log('remRun의 상태를 running으로 변경 후 새 작업으로 시작');
-  } //*/
+  console.log("\'runScript()\' The start position of changed range: row is " + range.getRow())
+  console.log("\'runScript()\' The start position of changed range: column is " + range.getColumn());  
+  console.log("\'runScript()\' The number of changed row is " + range.getNumRows())
+  console.log("\'runScript()\' The number of changed column is " + range.getNumColumns());
 
+  var h = 0;
+  var countHQ = 0;
+  var countVN = 0;
 
-  /* console.log("\'updateMacro()\' The start position of changed range: row is " + range.getRow())
-  console.log("\'updateMacro()\' The start position of changed range: column is " + range.getColumn());  
-  console.log("\'updateMacro()\' The number of changed row is " + range.getNumRows())
-  console.log("\'updateMacro()\' The number of changed column is " + range.getNumColumns()); */
-
+  //일정 편집이 발생한 위치에서 HQ가 업데이트 된 것인지, VN이 업데이트 된 것인지 등을 먼저 확인해 개수 정보르 갖고 있기 위함
   var editedcellnums = parseInt(range.getNumRows() * range.getNumColumns());
 
-  console.log(`\`updateMacro()\` Edited number of cells is(are) ${editedcellnums} and current h is ${h} !!`);
+  console.log(`\`runScript()\` Edited number of cells is(are) ${editedcellnums} and current h is ${h} !!`);
 
   var bg = range.getBackgrounds();
 
 
-  console.log("\'updateMacro()\' The number of initial HQ background cell is " + countHQ);
-  console.log("\'updateMacro()\' The number of initial VN background cell is " + countVN);
+  console.log("\'runScript()\' The number of initial HQ background cell is " + countHQ);
+  console.log("\'runScript()\' The number of initial VN background cell is " + countVN);
 
   if (h == 0) {
     for(var i=0;i<bg.length;i++){
       for(var j=0;j<bg[0].length;j++){
         
         if( bg[i][j] == HQcolor ){
-          //console.log("\'updateMacro()\' Current cell background info is " + bg[i][j])
-          //console.log("\'updateMacro()\' The number of counted HQ background cell is " + countHQ)
+          //console.log("\'runScript()\' Current cell background info is " + bg[i][j])
+          //console.log("\'runScript()\' The number of counted HQ background cell is " + countHQ)
           countHQ=countHQ+1;
         }else if(bg[i][j] == VNcolor){
-          //console.log("\'updateMacro()\' Current cell background info is " + bg[i][j])
-          //console.log("\'updateMacro()\' The number of counted VN background cell is " + countVN)
+          //console.log("\'runScript()\' Current cell background info is " + bg[i][j])
+          //console.log("\'runScript()\' The number of counted VN background cell is " + countVN)
           countVN=countVN+1;
         }
       }
     }
   }  
 
-  console.log("\'updateMacro()\' The number of counted HQ background cell is " + countHQ);
-  console.log("\'updateMacro()\' The number of counted VN background cell is " + countVN);
+  console.log("\'runScript()\' The number of counted HQ background cell is " + countHQ);
+  console.log("\'runScript()\' The number of counted VN background cell is " + countVN);
 
+  //일정 편집이 발생하면 현황을 업데이트 하기 위한 위치 정보를 변수로 만들고 경우에 따라 업데이트가 필요한
+  //부분만 업데이트 하는 등 변경 이벤트 발생을 최소화 함 
   var targetRangeHQ = sheet.getRange(5, range.getColumn(), 1, range.getNumColumns());
   var targetRangeVN = sheet.getRange(6, range.getColumn(), 1, range.getNumColumns());
 
   while (h < editedcellnums){
-    console.log(`\'updateMacro()\' while loop entered and h: ${h} \, edited cell nums : ${editedcellnums}`);
-
-    //remProp.setProperty(`remI`, h);
-
-/*     if(countHQ == 0 && countVN == 0){
-      return;
-    } */
+    console.log(`\'runScript()\' while loop entered and h: ${h} \, edited cell nums : ${editedcellnums}`);
 
     if (countHQ > 0 && countVN == 0) {
       console.log(`(Case 1) Only HQ cells updated case!`);
       for(i = 0; i < targetRangeHQ.getNumColumns(); i++){ 
-        remProp.setProperty(`remI`, h);
-
+  
         if (i == 0) {
-          console.log("\'updateMacro()\' The start position of targetRange(HQ) info: row is " + targetRangeHQ.getRow())
-          console.log("\'updateMacro()\' The start position of targetRange(HQ) info: column is " + targetRangeHQ.getColumn())
+          console.log("\'runScript()\' The start position of targetRange(HQ) info: row is " + targetRangeHQ.getRow())
+          console.log("\'runScript()\' The start position of targetRange(HQ) info: column is " + targetRangeHQ.getColumn())
         }else if(i > 0){
-          console.log("\'updateMacro()\' The cur_update position of targetRange(HQ) info: row is " + targetRangeHQ.getRow())
-          console.log("\'updateMacro()\' The cur_update position of targetRange(HQ) info: column is " + (targetRangeHQ.getColumn() + i))
+          console.log("\'runScript()\' The cur_update position of targetRange(HQ) info: row is " + targetRangeHQ.getRow())
+          console.log("\'runScript()\' The cur_update position of targetRange(HQ) info: column is " + (targetRangeHQ.getColumn() + i))
         }  
         
-        //console.log("\'updateMacro()\' i is " + i)
         updateFuncInRange(targetRangeHQ.getRow(), targetRangeHQ.getColumn() + i);   
         
   
         currentTime = (new Date()).getTime() / 1000;
-        console.log("Run time is " + (currentTime - startTime));
-
-        if ((currentTime - startTime) > MAXIMUM_EXE_TIME) {
-          console.log(`Time has gone more than MAXIMUM EXECUTION TIME!!!`)
-          remProp.setProperty('remRun', 'continue');
-
-          /* deleteTriggers('updateMacro');
-
-          ScriptApp.newTrigger('updateMacro')
-            .timeBased()
-            .after(EXE_TERM*1000)
-            .create();
-          
-          consolo.log(`다음 실행 시간 : ${EXE_TERM}초 뒤`); */
-  
-          return;
-
-        }
-  
-        /* if(currentTime - startTime > MAXIMUM_EXE_TIME){
-            remProp.setProperty('remRun', 'continue');
-  
-            deleteTriggers('updateMacro');
-  
-            ScriptApp.newTrigger('updateMacro')
-            .timeBased()
-            .after(EXE_TERM*1000)
-            .create();
-            consolo.log(`다음 실행 시간 : ${EXE_TERM}초 뒤`);
-  
-            return;
-        } */ 
+        console.log("Run time is " + (currentTime - startTime));        
         
         h++; 
       }
     }else if (countVN > 0 && countHQ == 0) {
       console.log(`(Case 2) Only VN cells updated case!`);
       for(j = 0; j < targetRangeVN.getNumColumns(); j++){
-        console.log("\'updateMacro()\' The start position of targetRange(VN) info: row is " + targetRangeVN.getRow())
-        console.log("\'updateMacro()\' The start position of targetRange(VN) info: column is " + targetRangeVN.getColumn())
-        console.log("\'updateMacro()\' j is " + j)
+        console.log("\'runScript()\' The start position of targetRange(VN) info: row is " + targetRangeVN.getRow())
+        console.log("\'runScript()\' The start position of targetRange(VN) info: column is " + targetRangeVN.getColumn())
+        console.log("\'runScript()\' j is " + j)
         updateFuncInRange(targetRangeVN.getRow(), targetRangeVN.getColumn() + j);
         
   
-        /* currentTime = (new Date()).getTime() / 1000;
+        currentTime = (new Date()).getTime() / 1000;
         console.log("current time is " + currentTime);
   
-        console.log("지나간 시간은 ? " + (currentTime - startTime) );
-  
-        if(currentTime - startTime > MAXIMUM_EXE_TIME){
-            remProp.setProperty('remRun', 'continue');
-      
-            deleteTriggers('updateMacro');
-      
-            ScriptApp.newTrigger('updateMacro')
-            .timeBased()
-            .after(EXE_TERM*1000)
-            .create();
-            consolo.log(`다음 실행 시간 : ${EXE_TERM}초 뒤`);
-      
-            return;
-        } */ 
+        console.log("지나간 시간은 ? " + (currentTime - startTime) );       
         
         h++;
       }
@@ -264,17 +273,17 @@ function updateMacro(sheet, range){
       console.log(`or`);
       console.log(`(Case 4) CellS cleared case!`);
       for(i = 0; i < targetRangeHQ.getNumColumns(); i++){   
-        console.log("\'updateMacro()\' The start position of targetRange(HQ) info: row is " + targetRangeHQ.getRow())
-        console.log("\'updateMacro()\' The start position of targetRange(HQ) info: column is " + targetRangeHQ.getColumn())
-        console.log("\'updateMacro()\' i is " + i)
+        console.log("\'runScript()\' The start position of targetRange(HQ) info: row is " + targetRangeHQ.getRow())
+        console.log("\'runScript()\' The start position of targetRange(HQ) info: column is " + targetRangeHQ.getColumn())
+        console.log("\'runScript()\' i is " + i)
         updateFuncInRange(targetRangeHQ.getRow(), targetRangeHQ.getColumn() + i);   
         h++;         
       }
 
       for(j = 0; j < targetRangeVN.getNumColumns(); j++){
-        //console.log("\'updateMacro()\' The start position of targetRange(VN) info: row is " + targetRangeVN.getRow())
-        //console.log("\'updateMacro()\' The start position of targetRange(VN) info: column is " + targetRangeVN.getColumn())
-        //console.log("\'updateMacro()\' j is " + j)
+        //console.log("\'runScript()\' The start position of targetRange(VN) info: row is " + targetRangeVN.getRow())
+        //console.log("\'runScript()\' The start position of targetRange(VN) info: column is " + targetRangeVN.getColumn())
+        //console.log("\'runScript()\' j is " + j)
         updateFuncInRange(targetRangeVN.getRow(), targetRangeVN.getColumn() + j);
         h++;        
       }
@@ -284,24 +293,34 @@ function updateMacro(sheet, range){
   }
 
   console.log('모든 카운트 작업 완료. 관련 자원 삭제 처리.');
-
-  remProp.deleteProperty('remRun');
-  remProp.deleteProperty('remI');
-  //deleteTriggers('updateMacro');
+  deleteTriggers('runScript');
   //SpreadsheetApp.flush();
   return;
 }
 
+
+/**
+ * @function name: deleteTriggers
+ * @author: Hyucksu Lee
+ * @update date: 2021.12.15
+ * @returns: null
+ * @description
+ * runScript 실행 완료 되면 마지막 단에 runScript trigger event를 제거하기 위함
+ */
 function deleteTriggers(funcName)
 {
   console.log(`\'deleteTriggers()\' function name is ${funcName} !!!!!!!!!!!!!!!!!!!!!!!!`)
-  //if (ScriptApp.getProjectTriggers().length > 0){
-  var triggers = ScriptApp.getProjectTriggers();
-  
-  for(var i=0; i<triggers.length; i++)
-    if(triggers[i].getHandlerFunction() == funcName)
-      ScriptApp.deleteTrigger(triggers[i]);    
-  //}  
+  console.log(`ScriptApp.getProjectTriggers().length (before delete triggers) is ${ScriptApp.getProjectTriggers().length} !`);
+
+  if (ScriptApp.getProjectTriggers().length > 0){
+    var triggers = ScriptApp.getProjectTriggers();
+    
+    for(var i=0; i<triggers.length; i++)
+      if(triggers[i].getHandlerFunction() == funcName)
+        ScriptApp.deleteTrigger(triggers[i]);    
+  }  
+
+  console.log(`ScriptApp.getProjectTriggers().length (after delete triggers) is ${ScriptApp.getProjectTriggers().length} !`);
   
   return;
 }
