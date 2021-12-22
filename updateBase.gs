@@ -92,6 +92,7 @@ function countOnBGColorYellow(countRange) {
  * @description
  * 현재 주차를 초록색으로 칠하기 위한 함수
  */
+
 function fillCurrentWeekRangeBG() {
     SpreadsheetApp.flush();
   
